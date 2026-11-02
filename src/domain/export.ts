@@ -14,7 +14,13 @@ function isObject(value: unknown): value is Record<string, unknown> {
 
 function isVehicle(value: unknown): value is Vehicle {
   if (!isObject(value)) return false
+  const category = value.category
+  const validCategory =
+    category === undefined ||
+    category === 'car' ||
+    category === 'motorcycle'
   return (
+    validCategory &&
     typeof value.id === 'string' &&
     typeof value.nickname === 'string' &&
     typeof value.plateNumber === 'string' &&
@@ -22,6 +28,13 @@ function isVehicle(value: unknown): value is Vehicle {
     typeof value.currentOdometerKm === 'number' &&
     typeof value.notes === 'string'
   )
+}
+
+export function normalizeVehicle(raw: Vehicle & { category?: Vehicle['category'] }): Vehicle {
+  return {
+    ...raw,
+    category: raw.category ?? 'car',
+  }
 }
 
 function isMaintenanceRecord(value: unknown): value is MaintenanceRecord {
@@ -37,7 +50,8 @@ function isMaintenanceRecord(value: unknown): value is MaintenanceRecord {
     typeof value.odometerKm === 'number' &&
     typeof value.title === 'string' &&
     typeof value.details === 'string' &&
-    (value.costIdr === undefined || typeof value.costIdr === 'number')
+    (value.costIdr === undefined || typeof value.costIdr === 'number') &&
+    (value.partId === undefined || typeof value.partId === 'string')
   )
 }
 
@@ -113,7 +127,7 @@ export function parseImportBundle(raw: unknown): ExportBundle {
         ? raw.exportedAt
         : new Date().toISOString(),
     settings,
-    vehicles: raw.vehicles,
+    vehicles: raw.vehicles.map((v) => normalizeVehicle(v as Vehicle)),
     maintenanceRecords: raw.maintenanceRecords,
     taxSchedules: raw.taxSchedules,
   }

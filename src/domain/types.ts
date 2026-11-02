@@ -1,11 +1,14 @@
 export type MaintenanceType = 'oil_change' | 'part_replacement' | 'other'
 
+export type VehicleCategory = 'car' | 'motorcycle'
+
 export type TaxType = 'pajak_tahunan' | 'pajak_5_tahun'
 
 export type ReminderStatus = 'overdue' | 'upcoming' | 'ok' | 'unset'
 
 export interface Vehicle {
   id: string
+  category: VehicleCategory
   nickname: string
   plateNumber: string
   makeModel: string
@@ -16,6 +19,7 @@ export interface Vehicle {
 export interface MaintenanceRecord {
   id: string
   vehicleId: string
+  partId?: string
   type: MaintenanceType
   serviceDate: string
   odometerKm: number
@@ -36,6 +40,11 @@ export interface TaxSchedule {
 
 export interface AppSettings {
   defaultRemindDaysBefore: number
+}
+
+export const VEHICLE_CATEGORY_LABELS: Record<VehicleCategory, string> = {
+  car: 'Mobil',
+  motorcycle: 'Motor',
 }
 
 export const TAX_TYPE_LABELS: Record<TaxType, string> = {

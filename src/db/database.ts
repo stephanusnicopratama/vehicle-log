@@ -5,10 +5,11 @@ import {
   type MaintenanceRecord,
   type TaxSchedule,
   type Vehicle,
+  type VehicleCategory,
 } from '../domain/types'
-import { createDefaultTaxSchedules } from '../domain/tax'
 import type { ExportBundle } from '../domain/types'
 import { mergeBundles, buildExportBundle } from '../domain/export'
+import { createDefaultTaxSchedules } from '../domain/tax'
 
 const SETTINGS_KEY = 'app'
 
@@ -26,6 +27,21 @@ export class VehicleLogDatabase extends Dexie {
       taxSchedules: 'id, vehicleId, taxType, nextDueDate',
       settings: 'key',
     })
+    this.version(2)
+      .stores({
+        vehicles: 'id, plateNumber, category',
+        maintenanceRecords: 'id, vehicleId, type, serviceDate, partId',
+        taxSchedules: 'id, vehicleId, taxType, nextDueDate',
+        settings: 'key',
+      })
+      .upgrade((tx) =>
+        tx
+          .table('vehicles')
+          .toCollection()
+          .modify((v: Vehicle & { category?: VehicleCategory }) => {
+            if (!v.category) v.category = 'car'
+          }),
+      )
   }
 }
 

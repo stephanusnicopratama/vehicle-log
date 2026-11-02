@@ -8,20 +8,25 @@ import { getTaxReminderStatus } from '../domain/reminders'
 import {
   MAINTENANCE_TYPE_LABELS,
   TAX_TYPE_LABELS,
+  VEHICLE_CATEGORY_LABELS,
   type MaintenanceRecord,
   type MaintenanceType,
   type TaxSchedule,
   type Vehicle,
 } from '../domain/types'
 import { StatusBadge } from '../components/StatusBadge'
+import { PartDetailPanel, resolvePart } from '../components/PartDetailPanel'
+import { VehicleDiagram } from '../components/VehicleDiagram'
+import { CategoryPicker } from '../components/CategoryPicker'
 import { formatIdr, formatKm } from '../lib/format'
 
-type Tab = 'maintenance' | 'tax' | 'edit'
+type Tab = 'parts' | 'maintenance' | 'tax' | 'edit'
 
 export function VehicleDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const [tab, setTab] = useState<Tab>('maintenance')
+  const [tab, setTab] = useState<Tab>('parts')
+  const [selectedPartId, setSelectedPartId] = useState<string | null>(null)
   const [maintFilter, setMaintFilter] = useState<'all' | MaintenanceType>(
     'all',
   )
@@ -80,19 +85,19 @@ export function VehicleDetailPage() {
           {vehicle.nickname}
         </h2>
         <p className="text-slate-400">
-          {[vehicle.plateNumber, vehicle.makeModel]
-            .filter(Boolean)
-            .join(' · ')}
+          {VEHICLE_CATEGORY_LABELS[vehicle.category]} ·{' '}
+          {[vehicle.plateNumber, vehicle.makeModel].filter(Boolean).join(' · ')}
         </p>
         <p className="mt-1 text-sm text-slate-500">
           Odometer: {formatKm(vehicle.currentOdometerKm)}
         </p>
       </div>
 
-      <div className="flex gap-2 rounded-xl bg-slate-900 p-1">
+      <div className="flex gap-1 overflow-x-auto rounded-xl bg-slate-900 p-1">
         {(
           [
-            ['maintenance', 'Perawatan'],
+            ['parts', 'Komponen'],
+            ['maintenance', 'Riwayat'],
             ['tax', 'Pajak'],
             ['edit', 'Edit'],
           ] as const
@@ -101,7 +106,7 @@ export function VehicleDetailPage() {
             key={key}
             type="button"
             onClick={() => setTab(key)}
-            className={`flex-1 rounded-lg py-2 text-sm font-medium ${
+            className={`min-w-[4.5rem] flex-1 rounded-lg py-2 text-sm font-medium whitespace-nowrap ${
               tab === key
                 ? 'bg-slate-800 text-white'
                 : 'text-slate-400 hover:text-slate-200'
@@ -111,6 +116,18 @@ export function VehicleDetailPage() {
           </button>
         ))}
       </div>
+
+      {tab === 'parts' && records && (
+        <PartsExplorerSection
+          vehicle={vehicle}
+          records={records}
+          selectedPartId={selectedPartId}
+          onSelectPart={setSelectedPartId}
+          onOdometerUpdate={async (km) => {
+            await db.vehicles.update(vehicle.id, { currentOdometerKm: km })
+          }}
+        />
+      )}
 
       {tab === 'maintenance' && (
         <MaintenanceSection
@@ -132,7 +149,7 @@ export function VehicleDetailPage() {
       {tab === 'edit' && (
         <EditVehicleForm
           vehicle={vehicle}
-          onSaved={() => setTab('maintenance')}
+          onSaved={() => setTab('parts')}
           onDelete={async () => {
             const ok = window.confirm('Hapus kendaraan ini?')
             if (!ok) return
@@ -140,6 +157,49 @@ export function VehicleDetailPage() {
             navigate('/vehicles')
           }}
         />
+      )}
+    </div>
+  )
+}
+
+function PartsExplorerSection({
+  vehicle,
+  records,
+  selectedPartId,
+  onSelectPart,
+  onOdometerUpdate,
+}: {
+  vehicle: Vehicle
+  records: MaintenanceRecord[]
+  selectedPartId: string | null
+  onSelectPart: (id: string | null) => void
+  onOdometerUpdate: (km: number) => Promise<void>
+}) {
+  const selectedPart =
+    selectedPartId != null
+      ? resolvePart(vehicle.category, selectedPartId)
+      : undefined
+
+  return (
+    <div className="space-y-4">
+      <VehicleDiagram
+        category={vehicle.category}
+        selectedPartId={selectedPartId}
+        onSelectPart={(id) => onSelectPart(id)}
+      />
+      {selectedPart ? (
+        <PartDetailPanel
+          vehicle={vehicle}
+          part={selectedPart}
+          records={records}
+          defaultKm={vehicle.currentOdometerKm}
+          onClose={() => onSelectPart(null)}
+          onOdometerUpdate={onOdometerUpdate}
+        />
+      ) : (
+        <p className="text-center text-sm text-slate-500">
+          Pilih komponen pada gambar untuk melihat detail dan riwayat.
+        </p>
       )}
     </div>
   )
@@ -512,6 +572,13 @@ function EditVehicleForm({
 
   return (
     <form onSubmit={submit} className="space-y-4">
+      <div>
+        <p className="mb-2 text-sm text-slate-400">Kategori</p>
+        <CategoryPicker
+          value={form.category}
+          onChange={(category) => setForm((f) => ({ ...f, category }))}
+        />
+      </div>
       {(
         [
           ['nickname', 'Nama'],

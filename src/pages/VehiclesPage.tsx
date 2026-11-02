@@ -5,9 +5,12 @@ import { createVehicle, db, deleteVehicle } from '../db/database'
 import { getTaxReminderStatus } from '../domain/reminders'
 import { EmptyState } from '../components/EmptyState'
 import { StatusBadge } from '../components/StatusBadge'
-import type { ReminderStatus, Vehicle } from '../domain/types'
+import type { ReminderStatus, Vehicle, VehicleCategory } from '../domain/types'
+import { VEHICLE_CATEGORY_LABELS } from '../domain/types'
+import { CategoryPicker } from '../components/CategoryPicker'
 
 const emptyForm = {
+  category: 'car' as VehicleCategory,
   nickname: '',
   plateNumber: '',
   makeModel: '',
@@ -71,6 +74,13 @@ export function VehiclesPage() {
           onSubmit={handleSubmit}
           className="space-y-4 rounded-2xl border border-slate-800 bg-slate-900/60 p-5"
         >
+          <div>
+            <p className="mb-2 text-sm text-slate-400">Kategori kendaraan</p>
+            <CategoryPicker
+              value={form.category}
+              onChange={(category) => setForm((f) => ({ ...f, category }))}
+            />
+          </div>
           <Field
             label="Nama / julukan"
             value={form.nickname}
@@ -158,6 +168,7 @@ export function VehiclesPage() {
                       {vehicle.nickname}
                     </Link>
                     <p className="text-sm text-slate-400">
+                      {VEHICLE_CATEGORY_LABELS[vehicle.category]} ·{' '}
                       {[vehicle.plateNumber, vehicle.makeModel]
                         .filter(Boolean)
                         .join(' · ') || '—'}
