@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { lazy, Suspense, useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { db, deleteVehicle, newId } from '../db/database'
@@ -16,9 +16,14 @@ import {
 } from '../domain/types'
 import { StatusBadge } from '../components/StatusBadge'
 import { PartDetailPanel, resolvePart } from '../components/PartDetailPanel'
-import { VehicleDiagram } from '../components/VehicleDiagram'
 import { CategoryPicker } from '../components/CategoryPicker'
 import { formatIdr, formatKm } from '../lib/format'
+
+const VehicleDiagram = lazy(() =>
+  import('../components/VehicleScene3D').then((m) => ({
+    default: m.VehicleDiagram,
+  })),
+)
 
 type Tab = 'parts' | 'maintenance' | 'tax' | 'edit'
 
@@ -182,11 +187,19 @@ function PartsExplorerSection({
 
   return (
     <div className="space-y-4">
-      <VehicleDiagram
-        category={vehicle.category}
-        selectedPartId={selectedPartId}
-        onSelectPart={(id) => onSelectPart(id)}
-      />
+      <Suspense
+        fallback={
+          <div className="flex h-[min(420px,55vh)] items-center justify-center rounded-2xl border border-slate-800 bg-slate-950 text-sm text-slate-500">
+            Memuat model 3D…
+          </div>
+        }
+      >
+        <VehicleDiagram
+          category={vehicle.category}
+          selectedPartId={selectedPartId}
+          onSelectPart={(id) => onSelectPart(id)}
+        />
+      </Suspense>
       {selectedPart ? (
         <PartDetailPanel
           vehicle={vehicle}
@@ -198,7 +211,7 @@ function PartsExplorerSection({
         />
       ) : (
         <p className="text-center text-sm text-slate-500">
-          Pilih komponen pada gambar untuk melihat detail dan riwayat.
+          Pilih komponen pada model 3D untuk melihat detail dan riwayat.
         </p>
       )}
     </div>
