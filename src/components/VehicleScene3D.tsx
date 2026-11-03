@@ -1,6 +1,6 @@
 import { Suspense, useMemo, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
-import { ContactShadows, OrbitControls } from '@react-three/drei'
+import { ContactShadows, Html, OrbitControls } from '@react-three/drei'
 import type { ThreeEvent } from '@react-three/fiber'
 import type { VehicleCategory } from '../domain/types'
 import { getPartsForCategory } from '../domain/partsCatalog'
@@ -46,7 +46,7 @@ export function VehicleDiagram(props: VehicleDiagramProps) {
         </Canvas>
       </div>
       <p className="border-t border-slate-800 px-4 py-2 text-center text-xs text-slate-500">
-        Putar model · ketuk komponen hijau untuk detail
+        Putar model · arahkan ke titik komponen untuk nama · ketuk untuk detail
       </p>
     </div>
   )
@@ -80,6 +80,7 @@ function VehicleScene({
 
 function PartHotspot({
   partId,
+  label,
   active,
   hovered,
   onSelect,
@@ -133,6 +134,24 @@ function PartHotspot({
         transparent
         opacity={active || hovered ? 0.95 : 0.72}
       />
+      {(hovered || active) && (
+        <Html
+          center
+          distanceFactor={9}
+          position={[0, Math.max(layout.size[1], layout.size[0]) * 0.85 + 0.08, 0]}
+          style={{ pointerEvents: 'none' }}
+        >
+          <div
+            className={`whitespace-nowrap rounded-md border px-2 py-1 text-xs font-medium shadow-lg ${
+              active
+                ? 'border-emerald-400/60 bg-emerald-950/95 text-emerald-100'
+                : 'border-teal-500/40 bg-slate-900/95 text-teal-100'
+            }`}
+          >
+            {label}
+          </div>
+        </Html>
+      )}
     </mesh>
   )
 }
@@ -164,15 +183,63 @@ const PART_LAYOUT: Record<string, PartLayout> = {
 }
 
 function CarBody() {
+  const paint = { color: '#334155', metalness: 0.35, roughness: 0.52 }
+  const cabin = { color: '#3f4f63', metalness: 0.22, roughness: 0.48 }
+  const glass = {
+    color: '#64748b',
+    metalness: 0.05,
+    roughness: 0.15,
+    transparent: true,
+    opacity: 0.55,
+  }
+
   return (
     <group>
-      <mesh position={[0, 0.15, 0]} castShadow receiveShadow>
-        <boxGeometry args={[2.1, 0.35, 0.95]} />
-        <meshStandardMaterial color="#334155" metalness={0.35} roughness={0.55} />
+      {/* Lower sill — side profile like a sedan */}
+      <mesh position={[0, 0.1, 0]} castShadow receiveShadow>
+        <boxGeometry args={[2.2, 0.2, 0.9]} />
+        <meshStandardMaterial {...paint} />
       </mesh>
-      <mesh position={[-0.15, 0.55, -0.05]} castShadow>
-        <boxGeometry args={[1.15, 0.45, 0.82]} />
-        <meshStandardMaterial color="#3f4f63" metalness={0.2} roughness={0.5} />
+      {/* Hood */}
+      <mesh position={[0.62, 0.28, 0.02]} castShadow>
+        <boxGeometry args={[0.88, 0.16, 0.86]} />
+        <meshStandardMaterial {...paint} />
+      </mesh>
+      {/* Cabin roof */}
+      <mesh position={[-0.05, 0.52, -0.04]} castShadow>
+        <boxGeometry args={[0.92, 0.38, 0.74]} />
+        <meshStandardMaterial {...cabin} />
+      </mesh>
+      {/* Trunk */}
+      <mesh position={[-0.68, 0.26, 0]} castShadow>
+        <boxGeometry args={[0.52, 0.14, 0.84]} />
+        <meshStandardMaterial {...paint} />
+      </mesh>
+      {/* Windshield & rear glass */}
+      <mesh position={[0.32, 0.5, 0.36]} rotation={[-0.42, 0, 0]} castShadow>
+        <boxGeometry args={[0.72, 0.06, 0.52]} />
+        <meshStandardMaterial {...glass} />
+      </mesh>
+      <mesh position={[-0.42, 0.48, 0.34]} rotation={[0.35, 0, 0]} castShadow>
+        <boxGeometry args={[0.48, 0.05, 0.48]} />
+        <meshStandardMaterial {...glass} />
+      </mesh>
+      {/* Bumpers & lights (read as car from orbit view) */}
+      <mesh position={[1.02, 0.12, 0.28]}>
+        <boxGeometry args={[0.08, 0.1, 0.22]} />
+        <meshStandardMaterial color="#fef3c7" emissive="#fbbf24" emissiveIntensity={0.35} />
+      </mesh>
+      <mesh position={[1.02, 0.12, -0.28]}>
+        <boxGeometry args={[0.08, 0.1, 0.22]} />
+        <meshStandardMaterial color="#fef3c7" emissive="#fbbf24" emissiveIntensity={0.35} />
+      </mesh>
+      <mesh position={[-1.02, 0.14, 0]}>
+        <boxGeometry args={[0.06, 0.12, 0.75]} />
+        <meshStandardMaterial color="#1e293b" roughness={0.9} />
+      </mesh>
+      <mesh position={[1.02, 0.1, 0]}>
+        <boxGeometry args={[0.06, 0.1, 0.78]} />
+        <meshStandardMaterial color="#1e293b" roughness={0.9} />
       </mesh>
       <Wheel position={[0.95, -0.05, 0.62]} />
       <Wheel position={[-0.95, -0.05, 0.62]} />
