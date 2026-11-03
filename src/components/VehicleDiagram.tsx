@@ -35,5 +35,3 @@ function MotorcycleSilhouette() {
     </g>
   )
 }
-
-export { VehicleDiagram } from './VehicleScene3D'

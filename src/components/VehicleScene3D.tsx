@@ -1,9 +1,11 @@
 import { Suspense, useMemo, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
-import { ContactShadows, Html, OrbitControls } from '@react-three/drei'
+import { ContactShadows, Html, OrbitControls, useGLTF } from '@react-three/drei'
 import type { ThreeEvent } from '@react-three/fiber'
+import * as THREE from 'three'
 import type { VehicleCategory } from '../domain/types'
 import { getPartsForCategory } from '../domain/partsCatalog'
+import { VEHICLE_GLB, VEHICLE_MODEL_TRANSFORM } from './vehicleModelConfig'
 
 interface VehicleDiagramProps {
   category: VehicleCategory
@@ -11,37 +13,47 @@ interface VehicleDiagramProps {
   onSelectPart: (partId: string) => void
 }
 
+useGLTF.preload(VEHICLE_GLB.car)
+useGLTF.preload(VEHICLE_GLB.motorcycle)
+
 export function VehicleDiagram(props: VehicleDiagramProps) {
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950">
       <div className="h-[min(420px,55vh)] w-full">
         <Canvas
-          camera={{ position: [4, 2.2, 4.5], fov: 42 }}
+          camera={{ position: [4.2, 2.5, 4.6], fov: 40 }}
           gl={{ antialias: true, alpha: true }}
           dpr={[1, 2]}
+          shadows
         >
           <color attach="background" args={['#0f172a']} />
-          <fog attach="fog" args={['#0f172a', 8, 18]} />
-          <ambientLight intensity={0.55} />
-          <directionalLight position={[5, 8, 3]} intensity={1.1} castShadow />
-          <directionalLight position={[-4, 2, -2]} intensity={0.35} />
+          <fog attach="fog" args={['#0f172a', 8, 20]} />
+          <ambientLight intensity={0.5} />
+          <directionalLight
+            position={[6, 9, 4]}
+            intensity={1.15}
+            castShadow
+            shadow-mapSize={[1024, 1024]}
+          />
+          <directionalLight position={[-5, 3, -3]} intensity={0.4} />
+          <pointLight position={[0, 2, 2]} intensity={0.25} />
           <Suspense fallback={null}>
             <VehicleScene {...props} />
           </Suspense>
           <ContactShadows
-            position={[0, -0.55, 0]}
-            opacity={0.45}
-            scale={12}
-            blur={2.5}
-            far={4}
+            position={[0, -0.52, 0]}
+            opacity={0.5}
+            scale={14}
+            blur={2.8}
+            far={4.5}
           />
           <OrbitControls
             enablePan={false}
             minPolarAngle={0.35}
             maxPolarAngle={Math.PI / 2.05}
-            minDistance={3.5}
-            maxDistance={9}
-            target={[0, 0.15, 0]}
+            minDistance={3.8}
+            maxDistance={10}
+            target={[0, 0.05, 0]}
           />
         </Canvas>
       </div>
@@ -61,8 +73,8 @@ function VehicleScene({
   const [hoveredId, setHoveredId] = useState<string | null>(null)
 
   return (
-    <group position={[0, -0.2, 0]}>
-      {category === 'car' ? <CarBody /> : <MotorcycleBody />}
+    <group position={[0, -0.05, 0]}>
+      <VehicleGlb category={category} />
       {parts.map((part) => (
         <PartHotspot
           key={part.id}
@@ -74,6 +86,28 @@ function VehicleScene({
           onHover={(v) => setHoveredId(v ? part.id : null)}
         />
       ))}
+    </group>
+  )
+}
+
+function VehicleGlb({ category }: { category: VehicleCategory }) {
+  const { scene } = useGLTF(VEHICLE_GLB[category])
+  const model = useMemo(() => {
+    const clone = scene.clone(true)
+    clone.traverse((obj) => {
+      if (obj instanceof THREE.Mesh) {
+        obj.castShadow = true
+        obj.receiveShadow = true
+      }
+    })
+    return clone
+  }, [scene])
+
+  const t = VEHICLE_MODEL_TRANSFORM[category]
+
+  return (
+    <group position={t.position} rotation={t.rotation} scale={t.scale}>
+      <primitive object={model} />
     </group>
   )
 }
@@ -96,7 +130,8 @@ function PartHotspot({
   const layout = PART_LAYOUT[partId]
   if (!layout) return null
 
-  const scale = active ? 1.12 : hovered ? 1.06 : 1
+  const highlighted = active || hovered
+  const scale = active ? 1.15 : hovered ? 1.08 : 1
   const color = active ? '#34d399' : hovered ? '#2dd4bf' : '#475569'
 
   function handleClick(e: ThreeEvent<MouseEvent>) {
@@ -132,13 +167,14 @@ function PartHotspot({
         metalness={0.25}
         roughness={0.45}
         transparent
-        opacity={active || hovered ? 0.95 : 0.72}
+        opacity={highlighted ? 0.92 : 0}
+        depthWrite={highlighted}
       />
-      {(hovered || active) && (
+      {highlighted && (
         <Html
           center
           distanceFactor={9}
-          position={[0, Math.max(layout.size[1], layout.size[0]) * 0.85 + 0.08, 0]}
+          position={[0, Math.max(layout.size[1], layout.size[0]) * 0.85 + 0.1, 0]}
           style={{ pointerEvents: 'none' }}
         >
           <div
@@ -163,124 +199,50 @@ type PartLayout = {
   geometry?: 'box' | 'sphere'
 }
 
+/** Hotspot positions tuned for Kenney sedan + chopper (X = front → rear). */
 const PART_LAYOUT: Record<string, PartLayout> = {
-  car_engine_oil: { position: [-0.55, 0.35, 0.55], size: [0.45, 0.28, 0.38] },
-  car_air_filter: { position: [-0.2, 0.62, 0.35], size: [0.32, 0.18, 0.28] },
-  car_battery: { position: [-0.95, 0.28, 0.15], size: [0.28, 0.22, 0.32] },
-  car_brake_front: { position: [0.95, 0.05, 0.72], size: [0.22, 0.22, 0.22], geometry: 'sphere' },
-  car_brake_rear: { position: [-0.95, 0.05, 0.72], size: [0.22, 0.22, 0.22], geometry: 'sphere' },
-  car_tires: { position: [0.95, -0.08, -0.55], size: [0.26, 0.26, 0.26], geometry: 'sphere' },
-  car_coolant: { position: [-0.75, 0.45, 0.95], size: [0.35, 0.35, 0.12] },
-  car_transmission_oil: { position: [0.15, 0.08, 0.45], size: [0.38, 0.2, 0.32] },
-  moto_engine_oil: { position: [0.05, 0.35, 0.15], size: [0.38, 0.32, 0.35] },
-  moto_chain: { position: [-0.75, 0.12, 0.05], size: [0.2, 0.2, 0.35] },
-  moto_brake_front: { position: [0.85, 0.08, 0.55], size: [0.2, 0.2, 0.2], geometry: 'sphere' },
-  moto_brake_rear: { position: [-0.85, 0.08, 0.55], size: [0.2, 0.2, 0.2], geometry: 'sphere' },
-  moto_tires: { position: [0.85, -0.05, -0.35], size: [0.24, 0.24, 0.24], geometry: 'sphere' },
-  moto_battery: { position: [-0.15, 0.55, -0.05], size: [0.28, 0.16, 0.22] },
-  moto_spark_plugs: { position: [0.2, 0.58, 0.2], size: [0.18, 0.14, 0.18] },
-  moto_air_filter: { position: [0.35, 0.48, 0.35], size: [0.22, 0.22, 0.22], geometry: 'sphere' },
-}
-
-function CarBody() {
-  const paint = { color: '#334155', metalness: 0.35, roughness: 0.52 }
-  const cabin = { color: '#3f4f63', metalness: 0.22, roughness: 0.48 }
-  const glass = {
-    color: '#64748b',
-    metalness: 0.05,
-    roughness: 0.15,
-    transparent: true,
-    opacity: 0.55,
-  }
-
-  return (
-    <group>
-      {/* Lower sill — side profile like a sedan */}
-      <mesh position={[0, 0.1, 0]} castShadow receiveShadow>
-        <boxGeometry args={[2.2, 0.2, 0.9]} />
-        <meshStandardMaterial {...paint} />
-      </mesh>
-      {/* Hood */}
-      <mesh position={[0.62, 0.28, 0.02]} castShadow>
-        <boxGeometry args={[0.88, 0.16, 0.86]} />
-        <meshStandardMaterial {...paint} />
-      </mesh>
-      {/* Cabin roof */}
-      <mesh position={[-0.05, 0.52, -0.04]} castShadow>
-        <boxGeometry args={[0.92, 0.38, 0.74]} />
-        <meshStandardMaterial {...cabin} />
-      </mesh>
-      {/* Trunk */}
-      <mesh position={[-0.68, 0.26, 0]} castShadow>
-        <boxGeometry args={[0.52, 0.14, 0.84]} />
-        <meshStandardMaterial {...paint} />
-      </mesh>
-      {/* Windshield & rear glass */}
-      <mesh position={[0.32, 0.5, 0.36]} rotation={[-0.42, 0, 0]} castShadow>
-        <boxGeometry args={[0.72, 0.06, 0.52]} />
-        <meshStandardMaterial {...glass} />
-      </mesh>
-      <mesh position={[-0.42, 0.48, 0.34]} rotation={[0.35, 0, 0]} castShadow>
-        <boxGeometry args={[0.48, 0.05, 0.48]} />
-        <meshStandardMaterial {...glass} />
-      </mesh>
-      {/* Bumpers & lights (read as car from orbit view) */}
-      <mesh position={[1.02, 0.12, 0.28]}>
-        <boxGeometry args={[0.08, 0.1, 0.22]} />
-        <meshStandardMaterial color="#fef3c7" emissive="#fbbf24" emissiveIntensity={0.35} />
-      </mesh>
-      <mesh position={[1.02, 0.12, -0.28]}>
-        <boxGeometry args={[0.08, 0.1, 0.22]} />
-        <meshStandardMaterial color="#fef3c7" emissive="#fbbf24" emissiveIntensity={0.35} />
-      </mesh>
-      <mesh position={[-1.02, 0.14, 0]}>
-        <boxGeometry args={[0.06, 0.12, 0.75]} />
-        <meshStandardMaterial color="#1e293b" roughness={0.9} />
-      </mesh>
-      <mesh position={[1.02, 0.1, 0]}>
-        <boxGeometry args={[0.06, 0.1, 0.78]} />
-        <meshStandardMaterial color="#1e293b" roughness={0.9} />
-      </mesh>
-      <Wheel position={[0.95, -0.05, 0.62]} />
-      <Wheel position={[-0.95, -0.05, 0.62]} />
-      <Wheel position={[0.95, -0.05, -0.62]} />
-      <Wheel position={[-0.95, -0.05, -0.62]} />
-    </group>
-  )
-}
-
-function MotorcycleBody() {
-  return (
-    <group rotation={[0, Math.PI / 2, 0]}>
-      <mesh position={[0, 0.35, 0]} castShadow>
-        <boxGeometry args={[0.55, 0.45, 0.7]} />
-        <meshStandardMaterial color="#334155" metalness={0.4} roughness={0.5} />
-      </mesh>
-      <mesh position={[0.55, 0.55, 0]} castShadow>
-        <boxGeometry args={[0.75, 0.12, 0.22]} />
-        <meshStandardMaterial color="#475569" />
-      </mesh>
-      <mesh position={[-0.55, 0.65, 0]} castShadow>
-        <boxGeometry args={[0.35, 0.08, 0.12]} />
-        <meshStandardMaterial color="#64748b" />
-      </mesh>
-      <Wheel position={[0.75, -0.05, 0]} scale={0.85} />
-      <Wheel position={[-0.75, -0.05, 0]} scale={0.85} />
-    </group>
-  )
-}
-
-function Wheel({
-  position,
-  scale = 1,
-}: {
-  position: [number, number, number]
-  scale?: number
-}) {
-  return (
-    <mesh position={position} scale={scale} rotation={[0, 0, Math.PI / 2]} castShadow>
-      <cylinderGeometry args={[0.32, 0.32, 0.18, 24]} />
-      <meshStandardMaterial color="#1e293b" metalness={0.15} roughness={0.85} />
-    </mesh>
-  )
+  car_engine_oil: { position: [0.78, 0.2, 0.22], size: [0.38, 0.22, 0.34] },
+  car_air_filter: { position: [0.48, 0.4, 0.12], size: [0.3, 0.16, 0.26] },
+  car_battery: { position: [0.58, 0.16, -0.32], size: [0.26, 0.2, 0.3] },
+  car_brake_front: {
+    position: [0.94, 0.02, 0.7],
+    size: [0.2, 0.2, 0.2],
+    geometry: 'sphere',
+  },
+  car_brake_rear: {
+    position: [-0.9, 0.02, 0.7],
+    size: [0.2, 0.2, 0.2],
+    geometry: 'sphere',
+  },
+  car_tires: {
+    position: [0.94, -0.14, -0.64],
+    size: [0.24, 0.24, 0.24],
+    geometry: 'sphere',
+  },
+  car_coolant: { position: [0.62, 0.36, 0.52], size: [0.32, 0.26, 0.1] },
+  car_transmission_oil: { position: [0.02, 0.1, 0.32], size: [0.34, 0.18, 0.3] },
+  moto_engine_oil: { position: [0.12, 0.3, 0.04], size: [0.36, 0.28, 0.32] },
+  moto_chain: { position: [-0.58, 0.14, 0], size: [0.18, 0.18, 0.32] },
+  moto_brake_front: {
+    position: [0.74, 0.03, 0.4],
+    size: [0.18, 0.18, 0.18],
+    geometry: 'sphere',
+  },
+  moto_brake_rear: {
+    position: [-0.74, 0.03, 0.4],
+    size: [0.18, 0.18, 0.18],
+    geometry: 'sphere',
+  },
+  moto_tires: {
+    position: [0.74, -0.1, -0.26],
+    size: [0.22, 0.22, 0.22],
+    geometry: 'sphere',
+  },
+  moto_battery: { position: [-0.08, 0.4, -0.06], size: [0.26, 0.14, 0.2] },
+  moto_spark_plugs: { position: [0.22, 0.46, 0.1], size: [0.16, 0.12, 0.16] },
+  moto_air_filter: {
+    position: [0.32, 0.38, 0.18],
+    size: [0.2, 0.2, 0.2],
+    geometry: 'sphere',
+  },
 }
