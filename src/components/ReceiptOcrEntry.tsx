@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { db, newId } from '../db/database'
 import { todayDateOnly } from '../domain/dates'
 import { parseReceiptText, type ParsedReceipt } from '../domain/receiptParse'
@@ -10,6 +10,81 @@ import {
 import { recognizeReceiptImage } from '../lib/receiptOcr'
 
 type Step = 'pick' | 'scanning' | 'review'
+
+function ReceiptImagePreview({ src, alt }: { src: string; alt: string }) {
+  const [open, setOpen] = useState(false)
+
+  useEffect(() => {
+    if (!open) return
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [open])
+
+  useEffect(() => {
+    if (!open) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prev
+    }
+  }, [open])
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="group block w-full rounded-lg border border-slate-700 bg-slate-950/50 p-1 text-left transition-colors hover:border-teal-500/50"
+      >
+        <img
+          src={src}
+          alt={alt}
+          className="mx-auto max-h-40 w-full rounded-md object-contain"
+        />
+        <p className="mt-1.5 text-center text-xs text-slate-500 group-hover:text-teal-300/90">
+          Ketuk gambar untuk perbesar dan cek data
+        </p>
+      </button>
+
+      {open && (
+        <div
+          className="fixed inset-0 z-[100] flex flex-col bg-black/90 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Pratinjau struk"
+        >
+          <div className="flex shrink-0 justify-end">
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="rounded-lg bg-slate-800 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700"
+            >
+              Tutup
+            </button>
+          </div>
+          <button
+            type="button"
+            className="flex min-h-0 flex-1 items-center justify-center"
+            onClick={() => setOpen(false)}
+          >
+            <img
+              src={src}
+              alt={alt}
+              className="max-h-[85vh] max-w-full object-contain"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </button>
+          <p className="shrink-0 pt-2 text-center text-xs text-slate-400">
+            Bandingkan struk dengan isian form · ketuk area gelap atau Tutup
+          </p>
+        </div>
+      )}
+    </>
+  )
+}
 
 interface ReceiptOcrEntryProps {
   vehicleId: string
@@ -144,11 +219,7 @@ export function ReceiptOcrEntry({
       {step === 'scanning' && (
         <div className="space-y-3 text-center">
           {previewUrl && (
-            <img
-              src={previewUrl}
-              alt="Pratinjau struk"
-              className="mx-auto max-h-40 rounded-lg border border-slate-700 object-contain"
-            />
+            <ReceiptImagePreview src={previewUrl} alt="Pratinjau struk" />
           )}
           <p className="text-sm text-slate-300">Membaca struk… {progress}%</p>
           <div className="mx-auto h-2 max-w-xs overflow-hidden rounded-full bg-slate-800">
@@ -166,11 +237,7 @@ export function ReceiptOcrEntry({
       {step === 'review' && (
         <form onSubmit={submit} className="space-y-3">
           {previewUrl && (
-            <img
-              src={previewUrl}
-              alt="Struk"
-              className="max-h-36 w-full rounded-lg border border-slate-700 object-contain"
-            />
+            <ReceiptImagePreview src={previewUrl} alt="Struk bengkel" />
           )}
           <p className="text-xs text-amber-200/90">
             Periksa dan koreksi isian — OCR tidak selalu sempurna.
