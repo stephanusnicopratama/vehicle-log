@@ -199,7 +199,7 @@ type PartLayout = {
   geometry?: 'box' | 'sphere'
 }
 
-/** Hotspot positions tuned for Kenney sedan + chopper (X = front → rear). */
+/** Hotspot positions tuned for Kenney sedan + motorcycle (X = front → rear). */
 const PART_LAYOUT: Record<string, PartLayout> = {
   car_engine_oil: { position: [0.78, 0.2, 0.22], size: [0.38, 0.22, 0.34] },
   car_air_filter: { position: [0.48, 0.4, 0.12], size: [0.3, 0.16, 0.26] },
@@ -215,7 +215,7 @@ const PART_LAYOUT: Record<string, PartLayout> = {
     geometry: 'sphere',
   },
   car_tires: {
-    position: [0.94, -0.14, -0.64],
+    position: [0.94, -0.14, 0.7],
     size: [0.24, 0.24, 0.24],
     geometry: 'sphere',
   },
@@ -234,7 +234,7 @@ const PART_LAYOUT: Record<string, PartLayout> = {
     geometry: 'sphere',
   },
   moto_tires: {
-    position: [0.74, -0.1, -0.26],
+    position: [0.74, -0.1, 0.4],
     size: [0.22, 0.22, 0.22],
     geometry: 'sphere',
   },
