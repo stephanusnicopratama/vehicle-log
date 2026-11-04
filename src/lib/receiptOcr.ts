@@ -1,29 +1,45 @@
-import { createWorker } from 'tesseract.js'
+import { createWorker, type Worker } from 'tesseract.js'
 
-const TESSERACT_CDN = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist'
-const TESSDATA_CDN = 'https://tessdata.projectnaptha.com/4.0.0'
+const TESSERACT_VERSION = '5.1.1'
+const CORE_CDN = `https://cdn.jsdelivr.net/npm/tesseract.js-core@${TESSERACT_VERSION}`
+
+function workerOptions(onProgress?: (percent: number) => void) {
+  const workerPath = `${import.meta.env.BASE_URL}tesseract/worker.min.js`
+  return {
+    workerPath,
+    corePath: CORE_CDN,
+    logger: (message: { status?: string; progress?: number }) => {
+      if (message.status === 'recognizing text' && onProgress) {
+        onProgress(Math.round((message.progress ?? 0) * 100))
+      }
+    },
+  }
+}
+
+async function openWorker(
+  langs: string,
+  onProgress?: (percent: number) => void,
+): Promise<Worker> {
+  return createWorker(langs, 1, workerOptions(onProgress))
+}
 
 export async function recognizeReceiptImage(
   file: Blob,
   onProgress?: (percent: number) => void,
 ): Promise<string> {
-  const worker = await createWorker('ind+eng', 1, {
-    workerPath: `${TESSERACT_CDN}/worker.min.js`,
-    langPath: TESSDATA_CDN,
-    corePath: `${TESSERACT_CDN}/tesseract-core-simd.wasm.js`,
-    logger: (message) => {
-      if (message.status === 'recognizing text' && onProgress) {
-        onProgress(Math.round((message.progress ?? 0) * 100))
-      }
-    },
-  })
-
+  let worker: Worker | null = null
   try {
+    try {
+      worker = await openWorker('ind+eng', onProgress)
+    } catch {
+      worker = await openWorker('eng', onProgress)
+    }
+
     const {
       data: { text },
     } = await worker.recognize(file)
     return text
   } finally {
-    await worker.terminate()
+    if (worker) await worker.terminate()
   }
 }

@@ -81,8 +81,11 @@ export function ReceiptOcrEntry({
           lockedPartId,
         }),
       )
-    } catch {
-      setError('OCR gagal. Periksa koneksi internet (unduh model sekali) lalu coba lagi.')
+    } catch (err) {
+      console.error('Receipt OCR failed', err)
+      setError(
+        'OCR gagal memuat mesin baca teks. Pastikan internet aktif untuk unduhan pertama, lalu coba lagi. Jika masih gagal, isi riwayat manual.',
+      )
       setStep('pick')
     }
   }
