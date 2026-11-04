@@ -24,6 +24,11 @@ const VehicleDiagram = lazy(() =>
     default: m.VehicleDiagram,
   })),
 )
+const VehiclePartsList = lazy(() =>
+  import('../components/VehicleScene3D').then((m) => ({
+    default: m.VehiclePartsList,
+  })),
+)
 
 type Tab = 'parts' | 'maintenance' | 'tax' | 'edit'
 
@@ -199,6 +204,11 @@ function PartsExplorerSection({
           selectedPartId={selectedPartId}
           onSelectPart={(id) => onSelectPart(id)}
         />
+        <VehiclePartsList
+          category={vehicle.category}
+          selectedPartId={selectedPartId}
+          onSelectPart={onSelectPart}
+        />
       </Suspense>
       {selectedPart ? (
         <PartDetailPanel
@@ -211,7 +221,8 @@ function PartsExplorerSection({
         />
       ) : (
         <p className="text-center text-sm text-slate-500">
-          Pilih komponen pada model 3D untuk melihat detail dan riwayat.
+          Pilih komponen pada model 3D atau dari daftar di bawah untuk detail dan
+          riwayat.
         </p>
       )}
     </div>

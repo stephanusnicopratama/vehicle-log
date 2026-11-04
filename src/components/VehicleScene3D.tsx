@@ -1,4 +1,4 @@
-import { Suspense, useMemo, useState } from 'react'
+import { Suspense, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { ContactShadows, Html, OrbitControls, useGLTF } from '@react-three/drei'
 import type { ThreeEvent } from '@react-three/fiber'
@@ -6,15 +6,61 @@ import * as THREE from 'three'
 import type { VehicleCategory } from '../domain/types'
 import { getPartsForCategory } from '../domain/partsCatalog'
 import { VEHICLE_GLB, VEHICLE_MODEL_TRANSFORM } from './vehicleModelConfig'
+import {
+  getPartHotspotSpec,
+  resolveHotspotPosition,
+  type PartHotspotSpec,
+} from './vehiclePartAnchors'
 
 interface VehicleDiagramProps {
   category: VehicleCategory
   selectedPartId: string | null
-  onSelectPart: (partId: string) => void
+  onSelectPart: (partId: string | null) => void
 }
 
 useGLTF.preload(VEHICLE_GLB.car)
 useGLTF.preload(VEHICLE_GLB.motorcycle)
+
+export function VehiclePartsList({
+  category,
+  selectedPartId,
+  onSelectPart,
+}: {
+  category: VehicleCategory
+  selectedPartId: string | null
+  onSelectPart: (partId: string | null) => void
+}) {
+  const parts = useMemo(() => getPartsForCategory(category), [category])
+
+  return (
+    <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
+      <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+        {parts.length} komponen yang bisa dipilih
+      </p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {parts.map((part) => {
+          const active = selectedPartId === part.id
+          return (
+            <button
+              key={part.id}
+              type="button"
+              onClick={() =>
+                onSelectPart(active ? null : part.id)
+              }
+              className={`rounded-full border px-3 py-1.5 text-sm font-medium transition-colors ${
+                active
+                  ? 'border-emerald-400/70 bg-emerald-950/80 text-emerald-100'
+                  : 'border-slate-700 bg-slate-950/80 text-slate-300 hover:border-slate-500 hover:text-white'
+              }`}
+            >
+              {part.label}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
 
 export function VehicleDiagram(props: VehicleDiagramProps) {
   return (
@@ -58,7 +104,7 @@ export function VehicleDiagram(props: VehicleDiagramProps) {
         </Canvas>
       </div>
       <p className="border-t border-slate-800 px-4 py-2 text-center text-xs text-slate-500">
-        Putar model · arahkan ke titik komponen untuk nama · ketuk untuk detail
+        Putar model · ketuk komponen di model atau pilih dari daftar di bawah
       </p>
     </div>
   )
@@ -74,24 +120,39 @@ function VehicleScene({
 
   return (
     <group position={[0, -0.05, 0]}>
-      <VehicleGlb category={category} />
-      {parts.map((part) => (
-        <PartHotspot
-          key={part.id}
-          partId={part.id}
-          label={part.label}
-          active={selectedPartId === part.id}
-          hovered={hoveredId === part.id}
-          onSelect={() => onSelectPart(part.id)}
-          onHover={(v) => setHoveredId(v ? part.id : null)}
-        />
-      ))}
+      <VehicleModelWithHotspots
+        category={category}
+        parts={parts}
+        selectedPartId={selectedPartId}
+        hoveredId={hoveredId}
+        onSelectPart={onSelectPart}
+        onHoverPart={setHoveredId}
+      />
     </group>
   )
 }
 
-function VehicleGlb({ category }: { category: VehicleCategory }) {
+function VehicleModelWithHotspots({
+  category,
+  parts,
+  selectedPartId,
+  hoveredId,
+  onSelectPart,
+  onHoverPart,
+}: {
+  category: VehicleCategory
+  parts: ReturnType<typeof getPartsForCategory>
+  selectedPartId: string | null
+  hoveredId: string | null
+  onSelectPart: (partId: string) => void
+  onHoverPart: (partId: string | null) => void
+}) {
   const { scene } = useGLTF(VEHICLE_GLB[category])
+  const transformRef = useRef<THREE.Group>(null)
+  const [positions, setPositions] = useState<
+    Record<string, [number, number, number]>
+  >({})
+
   const model = useMemo(() => {
     const clone = scene.clone(true)
     clone.traverse((obj) => {
@@ -105,31 +166,67 @@ function VehicleGlb({ category }: { category: VehicleCategory }) {
 
   const t = VEHICLE_MODEL_TRANSFORM[category]
 
+  useLayoutEffect(() => {
+    const group = transformRef.current
+    if (!group) return
+
+    const next: Record<string, [number, number, number]> = {}
+    for (const part of parts) {
+      const spec = getPartHotspotSpec(category, part.id)
+      if (!spec) continue
+      const pos = resolveHotspotPosition(model, group, spec)
+      if (!pos) continue
+      next[part.id] = [pos.x, pos.y, pos.z]
+    }
+    setPositions(next)
+  }, [category, model, parts])
+
   return (
-    <group position={t.position} rotation={t.rotation} scale={t.scale}>
+    <group
+      ref={transformRef}
+      position={t.position}
+      rotation={t.rotation}
+      scale={t.scale}
+    >
       <primitive object={model} />
+      {parts.map((part) => {
+        const pos = positions[part.id]
+        const spec = getPartHotspotSpec(category, part.id)
+        if (!pos || !spec) return null
+        return (
+          <PartHotspot
+            key={part.id}
+            label={part.label}
+            spec={spec}
+            position={pos}
+            active={selectedPartId === part.id}
+            hovered={hoveredId === part.id}
+            onSelect={() => onSelectPart(part.id)}
+            onHover={(v) => onHoverPart(v ? part.id : null)}
+          />
+        )
+      })}
     </group>
   )
 }
 
 function PartHotspot({
-  partId,
   label,
+  spec,
+  position,
   active,
   hovered,
   onSelect,
   onHover,
 }: {
-  partId: string
   label: string
+  spec: PartHotspotSpec
+  position: [number, number, number]
   active: boolean
   hovered: boolean
   onSelect: () => void
   onHover: (over: boolean) => void
 }) {
-  const layout = PART_LAYOUT[partId]
-  if (!layout) return null
-
   const highlighted = active || hovered
   const scale = active ? 1.15 : hovered ? 1.08 : 1
   const color = active ? '#34d399' : hovered ? '#2dd4bf' : '#475569'
@@ -141,8 +238,7 @@ function PartHotspot({
 
   return (
     <mesh
-      position={layout.position}
-      rotation={layout.rotation ?? [0, 0, 0]}
+      position={position}
       scale={scale}
       onClick={handleClick}
       onPointerOver={(e) => {
@@ -155,10 +251,10 @@ function PartHotspot({
         document.body.style.cursor = 'auto'
       }}
     >
-      {layout.geometry === 'sphere' ? (
-        <sphereGeometry args={[layout.size[0], 16, 16]} />
+      {spec.geometry === 'sphere' ? (
+        <sphereGeometry args={[spec.size[0], 16, 16]} />
       ) : (
-        <boxGeometry args={layout.size} />
+        <boxGeometry args={spec.size} />
       )}
       <meshStandardMaterial
         color={color}
@@ -167,14 +263,14 @@ function PartHotspot({
         metalness={0.25}
         roughness={0.45}
         transparent
-        opacity={highlighted ? 0.92 : 0}
+        opacity={highlighted ? 0.92 : 0.35}
         depthWrite={highlighted}
       />
-      {highlighted && (
+      {(highlighted || active) && (
         <Html
           center
           distanceFactor={9}
-          position={[0, Math.max(layout.size[1], layout.size[0]) * 0.85 + 0.1, 0]}
+          position={[0, Math.max(spec.size[1], spec.size[0]) * 0.85 + 0.1, 0]}
           style={{ pointerEvents: 'none' }}
         >
           <div
@@ -190,59 +286,4 @@ function PartHotspot({
       )}
     </mesh>
   )
-}
-
-type PartLayout = {
-  position: [number, number, number]
-  size: [number, number, number]
-  rotation?: [number, number, number]
-  geometry?: 'box' | 'sphere'
-}
-
-/** Hotspot positions tuned for Kenney sedan + motorcycle (X = front → rear). */
-const PART_LAYOUT: Record<string, PartLayout> = {
-  car_engine_oil: { position: [0.78, 0.2, 0.22], size: [0.38, 0.22, 0.34] },
-  car_air_filter: { position: [0.48, 0.4, 0.12], size: [0.3, 0.16, 0.26] },
-  car_battery: { position: [0.58, 0.16, -0.32], size: [0.26, 0.2, 0.3] },
-  car_brake_front: {
-    position: [0.94, 0.02, 0.7],
-    size: [0.2, 0.2, 0.2],
-    geometry: 'sphere',
-  },
-  car_brake_rear: {
-    position: [-0.9, 0.02, 0.7],
-    size: [0.2, 0.2, 0.2],
-    geometry: 'sphere',
-  },
-  car_tires: {
-    position: [0.94, -0.14, 0.7],
-    size: [0.24, 0.24, 0.24],
-    geometry: 'sphere',
-  },
-  car_coolant: { position: [0.62, 0.36, 0.52], size: [0.32, 0.26, 0.1] },
-  car_transmission_oil: { position: [0.02, 0.1, 0.32], size: [0.34, 0.18, 0.3] },
-  moto_engine_oil: { position: [0.12, 0.3, 0.04], size: [0.36, 0.28, 0.32] },
-  moto_chain: { position: [-0.58, 0.14, 0], size: [0.18, 0.18, 0.32] },
-  moto_brake_front: {
-    position: [0.74, 0.03, 0.4],
-    size: [0.18, 0.18, 0.18],
-    geometry: 'sphere',
-  },
-  moto_brake_rear: {
-    position: [-0.74, 0.03, 0.4],
-    size: [0.18, 0.18, 0.18],
-    geometry: 'sphere',
-  },
-  moto_tires: {
-    position: [0.74, -0.1, 0.4],
-    size: [0.22, 0.22, 0.22],
-    geometry: 'sphere',
-  },
-  moto_battery: { position: [-0.08, 0.4, -0.06], size: [0.26, 0.14, 0.2] },
-  moto_spark_plugs: { position: [0.22, 0.46, 0.1], size: [0.16, 0.12, 0.16] },
-  moto_air_filter: {
-    position: [0.32, 0.38, 0.18],
-    size: [0.2, 0.2, 0.2],
-    geometry: 'sphere',
-  },
 }
