@@ -29,6 +29,11 @@ const VehiclePartsList = lazy(() =>
     default: m.VehiclePartsList,
   })),
 )
+const ReceiptOcrEntry = lazy(() =>
+  import('../components/ReceiptOcrEntry').then((m) => ({
+    default: m.ReceiptOcrEntry,
+  })),
+)
 
 type Tab = 'parts' | 'maintenance' | 'tax' | 'edit'
 
@@ -142,6 +147,7 @@ export function VehicleDetailPage() {
       {tab === 'maintenance' && (
         <MaintenanceSection
           vehicleId={vehicle.id}
+          vehicleCategory={vehicle.category}
           defaultKm={vehicle.currentOdometerKm}
           records={sortedRecords}
           filter={maintFilter}
@@ -231,6 +237,7 @@ function PartsExplorerSection({
 
 function MaintenanceSection({
   vehicleId,
+  vehicleCategory,
   defaultKm,
   records,
   filter,
@@ -238,17 +245,25 @@ function MaintenanceSection({
   onOdometerUpdate,
 }: {
   vehicleId: string
+  vehicleCategory: Vehicle['category']
   defaultKm: number
   records: MaintenanceRecord[]
   filter: 'all' | MaintenanceType
   onFilterChange: (f: 'all' | MaintenanceType) => void
   onOdometerUpdate: (km: number) => Promise<void>
 }) {
-  const [mode, setMode] = useState<'oil' | 'part' | null>(null)
+  const [mode, setMode] = useState<'oil' | 'part' | 'receipt' | null>(null)
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => setMode('receipt')}
+          className="rounded-lg bg-teal-800/80 px-3 py-2 text-sm font-medium text-teal-50"
+        >
+          + Dari foto struk
+        </button>
         <button
           type="button"
           onClick={() => setMode('oil')}
@@ -264,6 +279,25 @@ function MaintenanceSection({
           + Spare part
         </button>
       </div>
+
+      {mode === 'receipt' && (
+        <Suspense
+          fallback={
+            <p className="text-sm text-slate-500">Memuat pemindai struk…</p>
+          }
+        >
+          <ReceiptOcrEntry
+            vehicleId={vehicleId}
+            vehicleCategory={vehicleCategory}
+            defaultOdometerKm={defaultKm}
+            onDone={async (km) => {
+              await onOdometerUpdate(km)
+              setMode(null)
+            }}
+            onCancel={() => setMode(null)}
+          />
+        </Suspense>
+      )}
 
       {mode === 'oil' && (
         <MaintenanceForm

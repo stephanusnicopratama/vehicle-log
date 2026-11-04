@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import { db, newId } from '../db/database'
 import { formatDisplayDate, todayDateOnly } from '../domain/dates'
 import {
@@ -14,6 +14,10 @@ import {
   type VehicleCategory,
 } from '../domain/types'
 import { formatIdr, formatKm } from '../lib/format'
+
+const ReceiptOcrEntry = lazy(() =>
+  import('./ReceiptOcrEntry').then((m) => ({ default: m.ReceiptOcrEntry })),
+)
 
 interface PartDetailPanelProps {
   vehicle: Vehicle
@@ -33,6 +37,7 @@ export function PartDetailPanel({
   onOdometerUpdate,
 }: PartDetailPanelProps) {
   const [showForm, setShowForm] = useState(false)
+  const [showOcr, setShowOcr] = useState(false)
   const partRecords = recordsForPart(records, part).sort((a, b) =>
     b.serviceDate.localeCompare(a.serviceDate),
   )
@@ -69,14 +74,39 @@ export function PartDetailPanel({
         </p>
       </div>
 
-      {!showForm ? (
-        <button
-          type="button"
-          onClick={() => setShowForm(true)}
-          className="mt-4 w-full rounded-xl bg-emerald-600 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500"
-        >
-          Catat perawatan / ganti part
-        </button>
+      {!showForm && !showOcr ? (
+        <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+          <button
+            type="button"
+            onClick={() => setShowForm(true)}
+            className="flex-1 rounded-xl bg-emerald-600 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500"
+          >
+            Catat perawatan / ganti part
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowOcr(true)}
+            className="flex-1 rounded-xl border border-teal-500/40 bg-teal-950/40 py-2.5 text-sm font-semibold text-teal-100 hover:bg-teal-900/50"
+          >
+            Scan struk bengkel
+          </button>
+        </div>
+      ) : showOcr ? (
+        <Suspense fallback={<p className="mt-4 text-sm text-slate-500">Memuat OCR…</p>}>
+          <ReceiptOcrEntry
+            vehicleId={vehicle.id}
+            vehicleCategory={vehicle.category}
+            defaultOdometerKm={defaultKm}
+            lockedType={part.defaultMaintenanceType}
+            lockedPartId={part.id}
+            lockedTitle={part.label}
+            onDone={async (km) => {
+              await onOdometerUpdate(km)
+              setShowOcr(false)
+            }}
+            onCancel={() => setShowOcr(false)}
+          />
+        </Suspense>
       ) : (
         <PartMaintenanceForm
           vehicleId={vehicle.id}
