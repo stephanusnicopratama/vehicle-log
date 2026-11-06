@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Separate Flutter game repo (not part of vehicle-log history)
+germ_smasher/
